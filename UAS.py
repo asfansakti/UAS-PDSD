@@ -1,57 +1,75 @@
+# UAS.py
+
 import streamlit as st
 import pandas as pd
-import numpy as np
-import seaborn as sns
-import altair as alt
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
 st.markdown("""
 KELOMPOK : DUDA PIR'AAUUW 
-ANGGOTA :
-10122361 - Muhammad. Asfan Sakti
-10122381 - Kana Dianto
-10122359 - Rafi Fadhlan Pratama
-10122473 - Muhamad Kamal
-10122380 - Muhamad Fardan Zawallu Syamsi
-10122356 - Natasya Dita Apriliana Arsono
+- ANGGOTA :
+- 10122361 - Muhammad. Asfan Sakti
+- 10122381 - Kana Dianto
+- 10122359 - Rafi Fadhlan Pratama
+- 10122473 - Muhamad Kamal
+- 10122380 - Muhamad Fardan Zawallu Syamsi
+- 10122356 - Natasya Dita Apriliana Arsono
 """, unsafe_allow_html=True)
 
-# Load Data
-df = pd.read_csv('orders_dataset.csv')  # Replace 'your_dataset.csv' with 'orders_dataset.csv' or the actual path
+# Load your dataset
+data = pd.read_csv('orders_dataset.csv') 
 
-# Menampilkan data
-st.write("Dataframe:")
-st.dataframe(df.head())
+# Tampilkan snapshot data jika diinginkan
+if st.sidebar.checkbox('Tampilkan Snapshot Data', False):
+    st.write(data.head())
 
-# Pilih kolom numerik untuk korelasi
-numeric_columns = df.select_dtypes(include=[np.number]).columns
+# Preprocessing Data
+features = ['order_approved_at', 'order_delivered_carrier_date', 'order_delivered_customer_date', 'order_estimated_delivery_date']
+data[features] = data[features].apply(pd.to_datetime)  # Konversi kolom timestamp menjadi tipe data datetime
 
-# Analisis sederhana
-st.write("Statistik Deskriptif:")
-st.write(df.describe())
+# Sidebar: Pengaturan Analisis
+st.sidebar.header('Pengaturan')
+n_clusters = st.sidebar.slider('Jumlah Cluster', min_value=2, max_value=10, value=3)
 
-# Visualisasi data
-selected_column = st.selectbox("Select Column for Histogram", df.columns)
-st.write(f"Histogram for {selected_column}:")
-chart = alt.Chart(df).mark_bar().encode(
-    x=selected_column,
-    y='count()',
-    tooltip=[selected_column, 'count()']
-).interactive()
+# Clustering dengan KMeans
+kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+data['cluster'] = kmeans.fit_predict(data[features])
 
-st.altair_chart(chart, use_container_width=True)
+# Visualisasi Clustering dengan Matplotlib
+fig, ax = plt.subplots()
+for cluster in data['cluster'].unique():
+    ax.scatter(data[data['cluster'] == cluster]['order_approved_at'], data[data['cluster'] == cluster]['order_delivered_customer_date'], label=f'Cluster {cluster}')
+ax.set_title('Clustering Hasil Berdasarkan Timestamp')
+ax.set_xlabel('order_approved_at')
+ax.set_ylabel('order_delivered_customer_date')
+st.pyplot(fig)
 
-# Visualisasi korelasi heatmap
-st.write("Correlation Heatmap:")
-correlation_matrix = df[numeric_columns].corr()
+# PCA Visualisasi
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(data[features])
+pca = PCA(n_components=2)
+components = pca.fit_transform(X_scaled)
+data['pca1'] = components[:, 0]
+data['pca2'] = components[:, 1]
 
-# Display the correlation matrix using Altair
-heatmap = alt.Chart(correlation_matrix.reset_index().melt(id_vars='index')).mark_rect().encode(
-    x='index:N',
-    y='variable:N',
-    color='value:Q'
-).properties(
-    width=500,
-    height=500
-)
+fig, ax = plt.subplots()
+scatter = ax.scatter(data['pca1'], data['pca2'], c=data['cluster'])
+legend = ax.legend(*scatter.legend_elements(), title="Clusters")
+ax.add_artist(legend)
+ax.set_title('PCA: Visualisasi Data Multidimensi')
+ax.set_xlabel('PC1')
+ax.set_ylabel('PC2')
+st.pyplot(fig)
 
-st.altair_chart(heatmap, use_container_width=True)
+# Korelasi Fitur
+if st.sidebar.checkbox('Tampilkan Heatmap Korelasi', False):
+    corr_matrix = data[features].corr()
+    fig, ax = plt.subplots()
+    cax = ax.matshow(corr_matrix, cmap='coolwarm')
+    fig.colorbar(cax)
+    plt.xticks(range(len(corr_matrix.columns)), corr_matrix.columns, rotation=90)
+    plt.yticks(range(len(corr_matrix.columns)), corr_matrix.columns)
+    ax.set_title('Heatmap Korelasi Fitur')
+    st.pyplot(fig)
